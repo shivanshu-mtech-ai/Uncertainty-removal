@@ -1,174 +1,169 @@
-# Uncertainty Removal in Traffic Data using Autoencoder
+# Uncertainty Removal in Traffic Data using LSTM Autoencoder
 
 ## Overview
 
-This project implements a deep learning approach to **clean traffic sensor data** by reducing uncertainty such as:
+This project focuses on removing uncertainty from traffic sensor data using a deep learning approach based on an LSTM Autoencoder. The dataset contains speed readings collected from multiple sensors over time. Due to real-world conditions, the data includes missing values (represented as zeros) along with natural variations in traffic speed.
 
-* Missing values (zeros)
-<img src="Figure_4.png" width="600"/>
-* Noise (random fluctuations)
-* Outliers (abnormal readings)
-<img src="Figure_2.png" width="600"/>
-
-
-The model used is an **Autoencoder**, which learns the underlying data patterns and reconstructs a cleaner version of the dataset.
+The objective is to correct missing values while preserving genuine traffic patterns.
 
 ---
 
 ## Dataset
 
-* **Dataset**: METR-LA
-* **Sensors**: 207 loop detectors
-* **Measurement**: Traffic speed (mph)
-* **Frequency**: Every 5 minutes
+- Dataset: METR-LA
+- Sensors: 207
+- Measurement: Speed (mph)
+- Time interval: 5 minutes
+- Total size: Approximately 34,000 time steps × 207 sensors
+
+The dataset contains a significant number of zero values, which represent missing or faulty sensor readings.
 
 ---
 
-## Project Pipeline
+## Problem Statement
 
-The workflow of the project is:
+The dataset includes uncertainty in the form of:
 
-```
-Raw Data → Visualization → Normalization → Autoencoder → Reconstruction → Inverse Scaling → Clean Data
-```
+- Missing values (zeros)
+- Natural variations in speed (not considered noise)
 
----
+The goal is to:
 
-## Data Preprocessing
-
-### 1. Load Data
-
-The dataset is loaded from an `.h5` file using `h5py`.
-
-### 2. Data Analysis
-
-Before training, the dataset is visualized to understand:
-
-* Distribution of values
-* Presence of missing values (zeros)
-* Noise and outliers in signals
-
-### 3. Normalization
-
-Data is scaled to the range `[0, 1]` using MinMaxScaler to stabilize neural network training.
+- Replace only missing values
+- Preserve real-world traffic behavior
+- Avoid over-smoothing the data
 
 ---
 
-## Model Architecture
+## Methodology
 
-The Autoencoder consists of two parts:
+1. Data Analysis
 
-### Encoder
+A distribution plot is used to identify the presence of missing values across the dataset. A temporal signal plot is used to observe variations in speed for a selected sensor.
 
-Compresses input data:
+2. Mask Creation
 
-```
-207 → 128 → 64
-```
+A boolean mask is created to identify missing values:
 
-### Decoder
+mask = (data == 0)
 
-Reconstructs the data:
-
-```
-64 → 128 → 207
-```
-
-### Bottleneck Layer
-
-The 64-dimensional layer acts as a bottleneck, forcing the model to learn only essential patterns and ignore noise.
+This ensures that only missing values are modified later.
 
 ---
 
-## Training
+3. Data Preparation (Forward Fill)
 
-* **Loss Function**: Mean Squared Error (MSE)
-* **Optimizer**: Adam
-* **Epochs**: 20
+Before training, missing values are temporarily replaced using forward filling:
 
-The model is trained to minimize the difference between input and reconstructed output.
-
----
-
-## Reconstruction
-
-After training, the model reconstructs the input data:
-
-```
-cleaned_data = reconstructed
-```
-
-This step performs:
-
-* Missing value correction
-* Noise smoothing
-* Outlier reduction
+- Each zero is replaced with the previous valid value
+- This step is only used for training the model
+- It prevents the model from learning incorrect patterns
 
 ---
 
-## Inverse Scaling
+4. Normalization
 
-The reconstructed data is converted back to original units (mph) using inverse transformation.
+Data is scaled to the range [0, 1] using MinMaxScaler:
 
----
-
-## Visualization
-
-The results are visualized using:
-
-* Line plots (before vs after)
-* Scatter plots (to highlight noise and outliers)
-
-### Output Interpretation:
-
-* Blue line → Original data
-* Orange line → Cleaned data
-<img src="Figure_3.png" width="600"/>
+- Improves training stability
+- Ensures consistent value ranges
 
 ---
 
-## Evaluation
+5. Sequence Creation
 
-Mean Squared Error (MSE) is used as a supporting metric to measure reconstruction quality.
+Since the dataset is temporal, sequences are created:
 
-Note: Visual comparison is more meaningful for evaluating noise and outlier removal.
+- Sequence length = 12
+- Each sequence represents consecutive time steps
 
----
+Example:
 
-## How to Run
-
-### 1. Install dependencies
-
-```bash
-pip install numpy torch matplotlib scikit-learn h5py
-```
-
-### 2. Place dataset
-
-Put `metr-la.h5` in the project directory.
-
-### 3. Run the script
-
-```bash
-python main.py
-```
+[t1, t2, t3, ..., t12]
 
 ---
 
-## Project Structure
+6. LSTM Autoencoder Model
 
-```
-project/
-│
-├── main.py
-├── metr-la.h5
-├── README.md
-```
+The model consists of:
 
-## Summary
+Encoder:
 
-This project demonstrates how an Autoencoder can be used to:
+- Input size: 207
+- Hidden size: 128
 
-* Learn patterns in traffic data
-* Remove uncertainty
-* Generate a cleaner, more reliable dataset
+Decoder:
+
+- Input size: 128
+- Output size: 207
+
+The model learns temporal dependencies and reconstructs sequences.
+
+---
+
+7. Training
+
+- Loss function: Mean Squared Error (MSE)
+- Optimizer: Adam
+- Epochs: 15
+
+The model is trained to reconstruct the input sequences.
+
+---
+
+8. Reconstruction
+
+After training:
+
+- The model outputs reconstructed sequences
+- Only the last timestep of each sequence is used for alignment
+
+reconstructed = reconstructed[:, -1, :]
+
+---
+
+9. Missing Value Correction
+
+Final step:
+
+cleaned_data = data_aligned.copy()
+cleaned_data[mask_aligned] = reconstructed_original[mask_aligned]
+
+- Only missing values are replaced
+- Original valid values remain unchanged
+
+---
+
+## Results
+
+Data Distribution
+
+Shows the presence of missing values across the dataset.
+
+---
+
+## Before vs After Correction
+
+Shows comparison between original and corrected data.
+
+<img width="600" height="400" src="./output.png" />
+
+---
+
+## Observations
+
+- Missing values are successfully corrected
+- Real traffic variations are preserved
+- No over-smoothing is observed
+- The model respects temporal dependencies
+
+---
+
+## Key Insights
+
+- Temporal data requires sequence-based models such as LSTM
+- Training on raw data with missing values leads to incorrect predictions
+- Forward filling improves learning without affecting final output
+- Mask-based replacement ensures minimal modification
+
+---
